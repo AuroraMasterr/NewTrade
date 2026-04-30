@@ -3,6 +3,7 @@ import requests
 import argparse
 from datetime import datetime, timedelta
 from tqdm import tqdm
+import sys
 
 
 def get_base_url(mode, freq):
@@ -26,6 +27,7 @@ def download(url, file):
         unit="B",
         unit_scale=True,
         unit_divisor=1024,
+        file=sys.stdout,
     ) as bar:
         for chunk in response.iter_content(chunk_size=1024):
             if chunk:
@@ -38,7 +40,7 @@ def binance_download(year, month, day, symbol, interval, mode, freq):
     m = str(month).zfill(2)
     d = str(day).zfill(2)
     filename = f"{symbol}-{interval}-{year}-{m}-{d}.zip"
-    save_dir = f"raw_data/{symbol}/{interval}"
+    save_dir = f"raw_data/crypto/binance/{symbol}/{mode}/{interval}"
     os.makedirs(save_dir, exist_ok=True)
     file = os.path.join(save_dir, filename)
     if os.path.exists(file):
