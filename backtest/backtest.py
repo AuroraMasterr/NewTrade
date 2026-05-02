@@ -4,10 +4,6 @@ import argparse
 import os
 from strategy import MyStrategy
 
-# class MyStrategy(bt.Strategy):
-#     def next(self):
-#         print(self.data.datetime.datetime[0], self.data.close[0])
-
 
 def parse_args():
     parser = argparse.ArgumentParser()
