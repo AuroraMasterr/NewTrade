@@ -43,18 +43,19 @@ def run_backtest(df, starting_cash):
         compression=60,
     )
     cerebro.adddata(data)
+
+    leverage = 30
     cerebro.addstrategy(
         MyStrategy,
-        leverage=30,
-        take_profit=0.25,
-        stop_loss=0.10,
+        leverage=leverage,
+        take_profit=0.3 / leverage,
+        stop_loss=0.10 / leverage,
         max_hold=4,
         threshold=0.005,
         commission_rate=0.0001,
     )
     cerebro.broker.setcash(starting_cash)
     cerebro.broker.setcommission(commission=0.0001, leverage=30, percabs=True)
-    # cerebro.addsizer(bt.sizers.AllInSizer)    # 使用满仓，考虑了杠杆但没考虑手续费，所以还是需要手动计算
     print(f"初始资金: {cerebro.broker.getvalue():.2f}")
     cerebro.run()
     print(f"最终资金: {cerebro.broker.getvalue():.2f}")

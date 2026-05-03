@@ -13,62 +13,56 @@ class MyStrategy(bt.Strategy):
     )
 
     def __init__(self):
-        self.order = None  # 当前主订单
-        self.tp_order = None  # 止盈单
-        self.sl_order = None  # 止损单
+        self.order = None                   # 主订单
+        self.bracket_orders = None          # [主订单, 止盈单, 止损单]
+        self.close_order = None             # 超时平仓订单
 
+        self.entry_bar = None               # 开仓 K 线 index
+        self.entry_side = None              # 开仓方向 "开多" / "开空"
         self.entry_price = None
+        
         self.bar_executed = None
         self.entry_dt = None
-        self.entry_bar = None
-        self.entry_side = None
         self.tp_price = None  # 止盈价
         self.sl_price = None  # 止损价
         self.pending_trade_logs = []
 
-    def _cancel_exit_orders(self):
-        # 撤掉止盈止损单
-        for order in (self.tp_order, self.sl_order):
-            if order:
-                self.cancel(order)
-        self.tp_order = None
-        self.sl_order = None
+    def close_timeout(self):
+        # 超时平仓
+        if self.position and len(self) - self.bar_executed >= self.p.max_hold:
+            for order in self.bracket_orders:
+                if order and order.alive():
+                    self.cancel(order)
+            self.bracket_orders = None
+            self.close_order = self.close()
 
-    def _place_exit_orders(self):
-        # 设置止盈止损单
-        tp_move = self.p.take_profit / self.p.leverage
-        sl_move = self.p.stop_loss / self.p.leverage
-        size = abs(self.position.size)
-        if self.position.size > 0:
-            self.tp_price = self.entry_price * (1 + tp_move)
-            self.sl_price = self.entry_price * (1 - sl_move)
-            self.tp_order = self.sell(
+    def open_position(self, price, is_buy):
+        # 开仓
+        if self.position:
+            return
+        size = self._calc_full_size(price)
+        if size <= 0:
+            return
+        if is_buy:
+            self.tp_price = price * (1 + self.p.take_profit)
+            self.sl_price = price * (1 - self.p.stop_loss)
+            self.bracket_orders = self.buy_bracket(
                 size=size,
-                exectype=bt.Order.Limit,
-                price=self.tp_price,
-            )
-            self.sl_order = self.sell(
-                size=size,
-                exectype=bt.Order.Stop,
-                price=self.sl_price,
-                oco=self.tp_order,
+                limitprice=self.tp_price,
+                stopprice=self.sl_price,
             )
         else:
-            self.tp_price = self.entry_price * (1 - tp_move)
-            self.sl_price = self.entry_price * (1 + sl_move)
-            self.tp_order = self.buy(
+            self.tp_price = price * (1 - self.p.take_profit)
+            self.sl_price = price * (1 + self.p.stop_loss)
+            self.bracket_orders = self.sell_bracket(
                 size=size,
-                exectype=bt.Order.Limit,
-                price=self.tp_price,
+                limitprice=self.tp_price,
+                stopprice=self.sl_price,
             )
-            self.sl_order = self.buy(
-                size=size,
-                exectype=bt.Order.Stop,
-                price=self.sl_price,
-                oco=self.tp_order,
-            )
+        self.entry_bar = len(self)
 
-    def _calc_full_size(self, price):
+
+    def calc_full_size(self, price):
         cash = self.broker.getcash() * 0.999
         unit_cost = price * ((1 / self.p.leverage) + self.p.commission_rate)
         return cash / unit_cost if unit_cost > 0 else 0.0
@@ -112,7 +106,7 @@ class MyStrategy(bt.Strategy):
     def next(self):
         self._flush_pending_trade_logs()
 
-        if self.order:
+        if self.bracket_orders:
             return
 
         o = self.data.open[0]
@@ -120,34 +114,33 @@ class MyStrategy(bt.Strategy):
         l = self.data.low[0]
         c = self.data.close[0]
 
-        if self.position:
-            if len(self) - self.bar_executed >= self.p.max_hold:
-                self._cancel_exit_orders()
-                self.order = self.close()
-                return
-            return
+        self.close_timeout()
 
         amplitude = h - l
         # 过滤振幅过短的信号
         if amplitude <= self.p.threshold * o:
             return
 
-        upper_shadow = h - max(o, c)
-        lower_shadow = min(o, c) - l
-        size = self._calc_full_size(c)
+        size = self.calc_full_size(c)
         if size <= 0:
             return
 
+        upper_shadow = h - max(o, c)
+        lower_shadow = min(o, c) - l
         if upper_shadow > (2 / 3) * amplitude:
-            self.order = self.sell(size=size)
+            # 上影线长，开空
+            self.open_position(price=c, is_buy=False)
         elif lower_shadow > (2 / 3) * amplitude:
-            self.order = self.buy(size=size)
+            # 下影线长，开多
+            self.open_position(price=c, is_buy=True)
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
             return
+        
+        entry_order, sl_order, tp_order = self.bracket_orders if self.bracket_orders else (None, None, None)
 
-        if order == self.order:
+        if order == entry_order:
             if order.status == order.Completed:
                 if self.position:
                     self.entry_price = order.executed.price
@@ -158,7 +151,6 @@ class MyStrategy(bt.Strategy):
                     print(
                         f"开仓成交: side={self.entry_side}, time={self.entry_dt}, price={self.entry_price:.2f}, size={order.executed.size:.6f}"
                     )
-                    self._place_exit_orders()
                 else:
                     exit_dt = self._format_dt(ago=-1)
                     exit_bar = len(self) - 1
@@ -186,9 +178,8 @@ class MyStrategy(bt.Strategy):
                     self.tp_price = None
                     self.sl_price = None
             if order.status in [order.Canceled, order.Margin, order.Rejected]:
-                logging.info(f"主订单被取消/拒绝/保证金不足: {order}")
-            self.order = None
-        elif order == self.tp_order or order == self.sl_order:
+                logging.error(f"主订单被取消/拒绝/保证金不足: {order}")
+        elif order == tp_order or order == sl_order:
             if order.status == order.Completed:
                 exit_dt = self._format_dt()
                 exit_bar = len(self)
@@ -224,6 +215,8 @@ class MyStrategy(bt.Strategy):
                 else:
                     self.sl_order = None
                     logging.info(f"止损单被取消/拒绝/保证金不足: {order}")
+        elif order == self.close_order:
+            pass
         else:
             assert False, "未知订单"
 
