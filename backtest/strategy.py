@@ -1,4 +1,5 @@
 import backtrader as bt
+import logging
 
 
 class MyStrategy(bt.Strategy):
@@ -12,16 +13,17 @@ class MyStrategy(bt.Strategy):
     )
 
     def __init__(self):
-        self.order = None
-        self.tp_order = None
-        self.sl_order = None
+        self.order = None  # 当前主订单
+        self.tp_order = None  # 止盈单
+        self.sl_order = None  # 止损单
+
         self.entry_price = None
         self.bar_executed = None
         self.entry_dt = None
         self.entry_bar = None
         self.entry_side = None
-        self.tp_price = None
-        self.sl_price = None
+        self.tp_price = None  # 止盈价
+        self.sl_price = None  # 止损价
         self.pending_trade_logs = []
 
     def _cancel_exit_orders(self):
@@ -33,11 +35,11 @@ class MyStrategy(bt.Strategy):
         self.sl_order = None
 
     def _place_exit_orders(self):
+        # 设置止盈止损单
         tp_move = self.p.take_profit / self.p.leverage
         sl_move = self.p.stop_loss / self.p.leverage
-        # 设置止盈止损单，同时把两条价格线记录下来，方便后面打印日志
+        size = abs(self.position.size)
         if self.position.size > 0:
-            size = self.position.size
             self.tp_price = self.entry_price * (1 + tp_move)
             self.sl_price = self.entry_price * (1 - sl_move)
             self.tp_order = self.sell(
@@ -52,7 +54,6 @@ class MyStrategy(bt.Strategy):
                 oco=self.tp_order,
             )
         else:
-            size = abs(self.position.size)
             self.tp_price = self.entry_price * (1 - tp_move)
             self.sl_price = self.entry_price * (1 + sl_move)
             self.tp_order = self.buy(
@@ -68,7 +69,7 @@ class MyStrategy(bt.Strategy):
             )
 
     def _calc_full_size(self, price):
-        cash = self.broker.getcash()
+        cash = self.broker.getcash() * 0.999
         unit_cost = price * ((1 / self.p.leverage) + self.p.commission_rate)
         return cash / unit_cost if unit_cost > 0 else 0.0
 
@@ -95,14 +96,14 @@ class MyStrategy(bt.Strategy):
             f"止盈线: {trade_log['tp_price']:.2f} | 止损线: {trade_log['sl_price']:.2f}"
         )
         print("交易区间前后2h K线:")
-        for bar_no in range(trade_log['start_bar'], trade_log['end_bar'] + 1):
+        for bar_no in range(trade_log["start_bar"], trade_log["end_bar"] + 1):
             print(self._get_bar_text(bar_no))
 
     def _flush_pending_trade_logs(self, force=False):
         # 平仓后要等 2 根 1h K 线走完，才能拿到“后 2h”的K线
         remaining_logs = []
         for trade_log in self.pending_trade_logs:
-            if force or len(self) >= trade_log['end_bar']:
+            if force or len(self) >= trade_log["end_bar"]:
                 self._print_trade_log(trade_log)
             else:
                 remaining_logs.append(trade_log)
@@ -150,32 +151,31 @@ class MyStrategy(bt.Strategy):
             if order.status == order.Completed:
                 if self.position:
                     self.entry_price = order.executed.price
-                    self.bar_executed = len(self)
-                    self.entry_dt = self._format_dt()
-                    self.entry_bar = len(self)
-                    # size > 0 表示开多，size < 0 表示开空
-                    self.entry_side = "开多" if order.executed.size > 0 else "开空"
+                    self.bar_executed = len(self) - 1
+                    self.entry_dt = self._format_dt(ago=-1)
+                    self.entry_bar = len(self) - 1
+                    self.entry_side = "开多" if order.isbuy() else "开空"
                     print(
                         f"开仓成交: side={self.entry_side}, time={self.entry_dt}, price={self.entry_price:.2f}, size={order.executed.size:.6f}"
                     )
                     self._place_exit_orders()
                 else:
-                    exit_dt = self._format_dt()
-                    exit_bar = len(self)
+                    exit_dt = self._format_dt(ago=-1)
+                    exit_bar = len(self) - 1
                     print(
                         f"平仓成交: time={exit_dt}, price={order.executed.price:.2f}, size={order.executed.size:.6f}"
                     )
                     self.pending_trade_logs.append(
                         {
-                            'side': self.entry_side,
-                            'entry_dt': self.entry_dt,
-                            'entry_price': self.entry_price,
-                            'exit_dt': exit_dt,
-                            'exit_price': order.executed.price,
-                            'tp_price': self.tp_price,
-                            'sl_price': self.sl_price,
-                            'start_bar': max(1, self.entry_bar - 2),
-                            'end_bar': exit_bar + 2,
+                            "side": self.entry_side,
+                            "entry_dt": self.entry_dt,
+                            "entry_price": self.entry_price,
+                            "exit_dt": exit_dt,
+                            "exit_price": order.executed.price,
+                            "tp_price": self.tp_price,
+                            "sl_price": self.sl_price,
+                            "start_bar": max(1, self.entry_bar - 2),
+                            "end_bar": exit_bar + 2,
                         }
                     )
                     self.entry_price = None
@@ -185,11 +185,10 @@ class MyStrategy(bt.Strategy):
                     self.entry_side = None
                     self.tp_price = None
                     self.sl_price = None
-            if order.status in [order.Completed, order.Canceled, order.Margin, order.Rejected]:
-                self.order = None
-            return
-
-        if order == self.tp_order or order == self.sl_order:
+            if order.status in [order.Canceled, order.Margin, order.Rejected]:
+                logging.info(f"主订单被取消/拒绝/保证金不足: {order}")
+            self.order = None
+        elif order == self.tp_order or order == self.sl_order:
             if order.status == order.Completed:
                 exit_dt = self._format_dt()
                 exit_bar = len(self)
@@ -198,15 +197,15 @@ class MyStrategy(bt.Strategy):
                 )
                 self.pending_trade_logs.append(
                     {
-                        'side': self.entry_side,
-                        'entry_dt': self.entry_dt,
-                        'entry_price': self.entry_price,
-                        'exit_dt': exit_dt,
-                        'exit_price': order.executed.price,
-                        'tp_price': self.tp_price,
-                        'sl_price': self.sl_price,
-                        'start_bar': max(1, self.entry_bar - 2),
-                        'end_bar': exit_bar + 2,
+                        "side": self.entry_side,
+                        "entry_dt": self.entry_dt,
+                        "entry_price": self.entry_price,
+                        "exit_dt": exit_dt,
+                        "exit_price": order.executed.price,
+                        "tp_price": self.tp_price,
+                        "sl_price": self.sl_price,
+                        "start_bar": max(1, self.entry_bar - 2),
+                        "end_bar": exit_bar + 2,
                     }
                 )
                 self.entry_price = None
@@ -221,8 +220,12 @@ class MyStrategy(bt.Strategy):
             elif order.status in [order.Canceled, order.Margin, order.Rejected]:
                 if order == self.tp_order:
                     self.tp_order = None
+                    logging.info(f"止盈单被取消/拒绝/保证金不足: {order}")
                 else:
                     self.sl_order = None
+                    logging.info(f"止损单被取消/拒绝/保证金不足: {order}")
+        else:
+            assert False, "未知订单"
 
     def stop(self):
         # 如果回测结束时还没等满“后 2h”，这里强制把剩余日志打出来
