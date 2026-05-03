@@ -20,6 +20,8 @@ class MyStrategy(bt.Strategy):
         self.entry_dt = None
         self.entry_bar = None
         self.entry_side = None
+        self.tp_price = None
+        self.sl_price = None
         self.pending_trade_logs = []
 
     def _cancel_exit_orders(self):
@@ -33,31 +35,35 @@ class MyStrategy(bt.Strategy):
     def _place_exit_orders(self):
         tp_move = self.p.take_profit / self.p.leverage
         sl_move = self.p.stop_loss / self.p.leverage
-        # 设置止盈止损单
+        # 设置止盈止损单，同时把两条价格线记录下来，方便后面打印日志
         if self.position.size > 0:
             size = self.position.size
+            self.tp_price = self.entry_price * (1 + tp_move)
+            self.sl_price = self.entry_price * (1 - sl_move)
             self.tp_order = self.sell(
                 size=size,
                 exectype=bt.Order.Limit,
-                price=self.entry_price * (1 + tp_move),
+                price=self.tp_price,
             )
             self.sl_order = self.sell(
                 size=size,
                 exectype=bt.Order.Stop,
-                price=self.entry_price * (1 - sl_move),
+                price=self.sl_price,
                 oco=self.tp_order,
             )
         else:
             size = abs(self.position.size)
+            self.tp_price = self.entry_price * (1 - tp_move)
+            self.sl_price = self.entry_price * (1 + sl_move)
             self.tp_order = self.buy(
                 size=size,
                 exectype=bt.Order.Limit,
-                price=self.entry_price * (1 - tp_move),
+                price=self.tp_price,
             )
             self.sl_order = self.buy(
                 size=size,
                 exectype=bt.Order.Stop,
-                price=self.entry_price * (1 + sl_move),
+                price=self.sl_price,
                 oco=self.tp_order,
             )
 
@@ -84,6 +90,9 @@ class MyStrategy(bt.Strategy):
         print(
             f"方向: {trade_log['side']} | 开仓时间: {trade_log['entry_dt']} | 开仓价格: {trade_log['entry_price']:.2f} | "
             f"平仓时间: {trade_log['exit_dt']} | 平仓价格: {trade_log['exit_price']:.2f}"
+        )
+        print(
+            f"止盈线: {trade_log['tp_price']:.2f} | 止损线: {trade_log['sl_price']:.2f}"
         )
         print("交易区间前后2h K线:")
         for bar_no in range(trade_log['start_bar'], trade_log['end_bar'] + 1):
@@ -163,6 +172,8 @@ class MyStrategy(bt.Strategy):
                             'entry_price': self.entry_price,
                             'exit_dt': exit_dt,
                             'exit_price': order.executed.price,
+                            'tp_price': self.tp_price,
+                            'sl_price': self.sl_price,
                             'start_bar': max(1, self.entry_bar - 2),
                             'end_bar': exit_bar + 2,
                         }
@@ -172,6 +183,8 @@ class MyStrategy(bt.Strategy):
                     self.entry_dt = None
                     self.entry_bar = None
                     self.entry_side = None
+                    self.tp_price = None
+                    self.sl_price = None
             if order.status in [order.Completed, order.Canceled, order.Margin, order.Rejected]:
                 self.order = None
             return
@@ -190,6 +203,8 @@ class MyStrategy(bt.Strategy):
                         'entry_price': self.entry_price,
                         'exit_dt': exit_dt,
                         'exit_price': order.executed.price,
+                        'tp_price': self.tp_price,
+                        'sl_price': self.sl_price,
                         'start_bar': max(1, self.entry_bar - 2),
                         'end_bar': exit_bar + 2,
                     }
@@ -199,6 +214,8 @@ class MyStrategy(bt.Strategy):
                 self.entry_dt = None
                 self.entry_bar = None
                 self.entry_side = None
+                self.tp_price = None
+                self.sl_price = None
                 self.tp_order = None
                 self.sl_order = None
             elif order.status in [order.Canceled, order.Margin, order.Rejected]:
