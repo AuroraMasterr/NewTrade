@@ -13,23 +13,22 @@ class MyStrategy(bt.Strategy):
     )
 
     def __init__(self):
-        self.order = None                   # 主订单
-        self.bracket_orders = None          # [主订单, 止盈单, 止损单]
-        self.close_order = None             # 超时平仓订单
+        self.order = None  # 主订单
+        self.bracket_orders = None  # [主订单, 止盈单, 止损单]
+        self.close_order = None  # 超时平仓订单
 
-        self.entry_bar = None               # 开仓 K 线 index
-        self.entry_side = None              # 开仓方向 "开多" / "开空"
-        self.entry_price = None
-        
-        self.bar_executed = None
-        self.entry_dt = None
+        self.entry_bar = None       # 开仓 K 线 index
+        self.entry_side = None      # 开仓方向 "开多" / "开空"
+        self.entry_price = None     # 开仓价格
+        self.entry_dt = None        # 开仓时间
+
         self.tp_price = None  # 止盈价
         self.sl_price = None  # 止损价
         self.pending_trade_logs = []
 
     def close_timeout(self):
         # 超时平仓
-        if self.position and len(self) - self.bar_executed >= self.p.max_hold:
+        if self.position and len(self) - self.entry_bar >= self.p.max_hold:
             for order in self.bracket_orders:
                 if order and order.alive():
                     self.cancel(order)
@@ -60,7 +59,8 @@ class MyStrategy(bt.Strategy):
                 stopprice=self.sl_price,
             )
         self.entry_bar = len(self)
-
+        self.entry_side = "开多" if is_buy else "开空"
+        self.entry_price = price
 
     def calc_full_size(self, price):
         cash = self.broker.getcash() * 0.999
@@ -68,7 +68,6 @@ class MyStrategy(bt.Strategy):
         return cash / unit_cost if unit_cost > 0 else 0.0
 
     def _format_dt(self, ago=0):
-        # Backtrader 的 datetime 需要手动转成 Python datetime 才好打印
         return bt.num2date(self.data.datetime[ago]).strftime("%Y-%m-%d %H:%M:%S")
 
     def _get_bar_text(self, target_bar):
@@ -141,50 +140,24 @@ class MyStrategy(bt.Strategy):
         entry_order, sl_order, tp_order = self.bracket_orders if self.bracket_orders else (None, None, None)
 
         if order == entry_order:
+            # 开仓单
             if order.status == order.Completed:
-                if self.position:
-                    self.entry_price = order.executed.price
-                    self.bar_executed = len(self) - 1
-                    self.entry_dt = self._format_dt(ago=-1)
-                    self.entry_bar = len(self) - 1
-                    self.entry_side = "开多" if order.isbuy() else "开空"
-                    print(
-                        f"开仓成交: side={self.entry_side}, time={self.entry_dt}, price={self.entry_price:.2f}, size={order.executed.size:.6f}"
-                    )
-                else:
-                    exit_dt = self._format_dt(ago=-1)
-                    exit_bar = len(self) - 1
-                    print(
-                        f"平仓成交: time={exit_dt}, price={order.executed.price:.2f}, size={order.executed.size:.6f}"
-                    )
-                    self.pending_trade_logs.append(
-                        {
-                            "side": self.entry_side,
-                            "entry_dt": self.entry_dt,
-                            "entry_price": self.entry_price,
-                            "exit_dt": exit_dt,
-                            "exit_price": order.executed.price,
-                            "tp_price": self.tp_price,
-                            "sl_price": self.sl_price,
-                            "start_bar": max(1, self.entry_bar - 2),
-                            "end_bar": exit_bar + 2,
-                        }
-                    )
-                    self.entry_price = None
-                    self.bar_executed = None
-                    self.entry_dt = None
-                    self.entry_bar = None
-                    self.entry_side = None
-                    self.tp_price = None
-                    self.sl_price = None
-            if order.status in [order.Canceled, order.Margin, order.Rejected]:
+                assert self.position, "主订单成交但没有持仓了？"
+                self.entry_dt = self._format_dt()
+                print(
+                    f"开仓成交: side={self.entry_side}, time={self.entry_dt}, price={self.entry_price:.2f}, size={order.executed.size:.6f}"
+                )
+            else:
                 logging.error(f"主订单被取消/拒绝/保证金不足: {order}")
         elif order == tp_order or order == sl_order:
+            # 止盈/止损单
+            order_type = "止盈单" if order == tp_order else "止损单"
             if order.status == order.Completed:
                 exit_dt = self._format_dt()
                 exit_bar = len(self)
+                exit_price = order.executed.price
                 print(
-                    f"平仓成交: time={exit_dt}, price={order.executed.price:.2f}, size={order.executed.size:.6f}"
+                    f"{order_type}成交: time={exit_dt}, price={order.executed.price:.2f}, size={order.executed.size:.6f}"
                 )
                 self.pending_trade_logs.append(
                     {
@@ -192,31 +165,44 @@ class MyStrategy(bt.Strategy):
                         "entry_dt": self.entry_dt,
                         "entry_price": self.entry_price,
                         "exit_dt": exit_dt,
-                        "exit_price": order.executed.price,
+                        "exit_price": exit_price,
                         "tp_price": self.tp_price,
                         "sl_price": self.sl_price,
-                        "start_bar": max(1, self.entry_bar - 2),
-                        "end_bar": exit_bar + 2,
+                        "start_bar": self.entry_bar,
+                        "end_bar": exit_bar,
                     }
                 )
-                self.entry_price = None
-                self.bar_executed = None
-                self.entry_dt = None
-                self.entry_bar = None
-                self.entry_side = None
-                self.tp_price = None
-                self.sl_price = None
-                self.tp_order = None
-                self.sl_order = None
-            elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-                if order == self.tp_order:
-                    self.tp_order = None
-                    logging.info(f"止盈单被取消/拒绝/保证金不足: {order}")
-                else:
-                    self.sl_order = None
-                    logging.info(f"止损单被取消/拒绝/保证金不足: {order}")
+            elif order.status == order.Canceled:
+                logging.info(f"{order_type}被取消: {order}")
+            else:
+                logging.error(f"{order_type}被拒绝/保证金不足: {order}")
         elif order == self.close_order:
-            pass
+            # 超时平仓单
+            exit_dt = self._format_dt()
+            exit_bar = len(self)
+            exit_price = order.executed.price
+            print(
+                f"超时平仓成交: time={exit_dt}, price={order.executed.price:.2f}, size={order.executed.size:.6f}"
+            )
+            self.pending_trade_logs.append(
+                {
+                    "side": self.entry_side,
+                    "entry_dt": self.entry_dt,
+                    "entry_price": self.entry_price,
+                    "exit_dt": exit_dt,
+                    "exit_price": order.executed.price,
+                    "tp_price": self.tp_price,
+                    "sl_price": self.sl_price,
+                    "start_bar": max(1, self.entry_bar - 2),
+                    "end_bar": exit_bar + 2,
+                }
+            )
+            self.entry_price = None
+            self.entry_dt = None
+            self.entry_bar = None
+            self.entry_side = None
+            self.tp_price = None
+            self.sl_price = None
         else:
             assert False, "未知订单"
 
