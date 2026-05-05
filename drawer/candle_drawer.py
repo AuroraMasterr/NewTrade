@@ -15,7 +15,7 @@ class CandlestickDrawer:
     REQUIRED_KEYS = ("timestamp", "open", "high", "low", "close")
 
     @staticmethod
-    def _setup_plot_style() -> None:
+    def _setup_plot_style():
         plt.rcParams["font.sans-serif"] = ["PingFang SC", "Heiti SC", "Arial Unicode MS", "DejaVu Sans"]
         plt.rcParams["axes.unicode_minus"] = False
 
@@ -106,14 +106,18 @@ def plot_candlestick(
 ) -> Optional[str]:
     return CandlestickDrawer.plot(candles=candles, title=title, save_path=save_path, show=show)
 
-def make_dict():
+def make_dict(open, close):
     return {
         "timestamp": datetime.now(),
-        "open": 100000+random.uniform(-100, 100),
+        "open": open,
         "low": 10000+random.uniform(-100, 100),
-        "close": 10000,
+        "high": 20000+random.uniform(-100, 100),
+        "close": close,
     }
 
 if __name__ == "__main__":
-    klines = [make_dict() for _ in range(10)]
+    d1 = make_dict(12000, 13000)
+    d2 = make_dict(13000, 14000)
+    d3 = make_dict(14000, 12000)
+    klines = [d1, d2, d3]
     plot_candlestick(klines)

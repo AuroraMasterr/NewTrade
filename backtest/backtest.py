@@ -3,7 +3,8 @@ import pandas as pd
 import argparse
 import os
 from strategy import MyStrategy
-
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def parse_args():
     parser = argparse.ArgumentParser()
