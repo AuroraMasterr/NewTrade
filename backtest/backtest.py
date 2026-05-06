@@ -4,6 +4,7 @@ import argparse
 import os
 from strategy import MyStrategy
 import logging
+import shutil
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -65,9 +66,15 @@ def run_backtest(df, starting_cash):
     cerebro.run()
     print(f"最终资金: {cerebro.broker.getvalue():.2f}")
 
+def prepare():
+    if os.path.exists("pictures"):
+        shutil.rmtree("pictures")
+    os.makedirs("pictures")
+
 
 if __name__ == "__main__":
     args = parse_args()
     df = get_data(args.input_dir, args.start_date, args.end_date)
     starting_cash = 100000
+    prepare()
     run_backtest(df, starting_cash)

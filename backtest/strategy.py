@@ -170,10 +170,10 @@ class MyStrategy(bt.Strategy):
         lower_shadow = min(o, c) - l
         if upper_shadow > (2 / 3) * amplitude:
             # 上影线长，开空
-            self.open_position(price=c, is_buy=False, amplitude=amplitude)
+            self.open_position(price=c, is_buy=False, amplitude=amplitude / o)
         elif lower_shadow > (2 / 3) * amplitude:
             # 下影线长，开多
-            self.open_position(price=c, is_buy=True, amplitude=amplitude)
+            self.open_position(price=c, is_buy=True, amplitude=amplitude / o)
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -236,7 +236,7 @@ class MyStrategy(bt.Strategy):
             os.remove(xlsx_file)
         cash = 100
         for trade_log in self.trade_logs:
-            # self._print_trade_log(trade_log)
+            self._print_trade_log(trade_log)
             file = os.path.join(
                 "pictures", f"chart_{trade_log['entry_dt'].replace(' ', '_')}.png"
             )

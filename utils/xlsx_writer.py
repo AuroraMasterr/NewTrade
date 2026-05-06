@@ -13,6 +13,24 @@ def calculate_profit_pct(trade_log):
     return profit_pct
 
 
+def write_values(ws, row_idx, trade_log, current_cap, klines_figure):
+    cell = ws.cell(row=row_idx, column=1, value=trade_log["pinbar_amplitude"])
+    cell.number_format = "0.00%"
+    ws.cell(row=row_idx, column=2, value=trade_log["side"])
+    ws.cell(row=row_idx, column=3, value=str(trade_log["entry_dt"]))
+    ws.cell(row=row_idx, column=4, value=trade_log["entry_price"])
+    ws.cell(row=row_idx, column=5, value=trade_log["leverage"])
+    ws.cell(row=row_idx, column=6, value=trade_log["tp_price"])
+    ws.cell(row=row_idx, column=7, value=trade_log["sl_price"])
+    ws.cell(row=row_idx, column=8, value=str(trade_log["exit_dt"]))
+    ws.cell(row=row_idx, column=9, value=trade_log["exit_price"])
+    cell = ws.cell(row=row_idx, column=10, value=calculate_profit_pct(trade_log))
+    cell.number_format = "0.00%"
+    cell = ws.cell(row=row_idx, column=11, value=current_cap)
+    cell.number_format = "0.00"
+
+
+
 def save_tradelog_to_xlsx(trade_log, klines_figure, xlsx_path, sheet_name, current_cap):
     headers = [
         "Pinbar振幅",
@@ -45,19 +63,7 @@ def save_tradelog_to_xlsx(trade_log, klines_figure, xlsx_path, sheet_name, curre
         for i, h in enumerate(headers, start=1):
             ws.cell(row=1, column=i, value=h)
     row_idx = ws.max_row + 1
-    ws.cell(row=row_idx, column=1, value=trade_log["pinbar_amplitude"])
-    ws.cell(row=row_idx, column=2, value=trade_log["side"])
-    ws.cell(row=row_idx, column=3, value=str(trade_log["entry_dt"]))
-    ws.cell(row=row_idx, column=4, value=trade_log["entry_price"])
-    ws.cell(row=row_idx, column=5, value=trade_log["leverage"])
-    ws.cell(row=row_idx, column=6, value=trade_log["tp_price"])
-    ws.cell(row=row_idx, column=7, value=trade_log["sl_price"])
-    ws.cell(row=row_idx, column=8, value=str(trade_log["exit_dt"]))
-    ws.cell(row=row_idx, column=9, value=trade_log["exit_price"])
-    ws.cell(row=row_idx, column=10, value=calculate_profit_pct(trade_log))
-    ws.cell(row=row_idx, column=11, value=current_cap)
-    ws.cell(row=row_idx, column=12, value=klines_figure)
-
+    write_values(ws, row_idx, trade_log, current_cap, klines_figure)
     if klines_figure and os.path.exists(klines_figure):
         img = XLImage(klines_figure)
         img.width = 250
