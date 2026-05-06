@@ -1,5 +1,9 @@
 import backtrader as bt
 import logging
+import numpy as np
+import pandas as pd
+import os
+from drawer.drawer import plot_with_mpf
 
 
 class MyStrategy(bt.Strategy):
@@ -16,15 +20,15 @@ class MyStrategy(bt.Strategy):
         self.bracket_orders = None  # [主订单, 止损单, 止盈单]
         self.close_order = None  # 超时平仓订单
 
-        self.entry_bar = None       # 开仓 K 线 index
-        self.entry_side = None      # 开仓方向 "开多" / "开空"
-        self.entry_price = None     # 开仓价格
-        self.entry_dt = None        # 开仓时间
+        self.entry_bar = None  # 开仓 K 线 index
+        self.entry_side = None  # 开仓方向 "开多" / "开空"
+        self.entry_price = None  # 开仓价格
+        self.entry_dt = None  # 开仓时间
 
         self.tp_price = None  # 止盈价
         self.sl_price = None  # 止损价
 
-        self.trade_logs = []        # 日志
+        self.trade_logs = []  # 日志
 
     def add_log(self, exit_dt, exit_price, exit_bar):
         self.trade_logs.append(
@@ -106,10 +110,41 @@ class MyStrategy(bt.Strategy):
         for bar_no in range(trade_log["start_bar"], trade_log["exit_bar"] + 1):
             print(self._get_bar_text(bar_no))
 
+    def draw_graph(self, trade_log):
+        klines = []
+        for bar_no in range(
+            max(1, trade_log["start_bar"] - 7), trade_log["exit_bar"] + 1
+        ):
+            ago = bar_no - len(self)
+            kline = {
+                "Open": self.data.open[ago],
+                "High": self.data.high[ago],
+                "Low": self.data.low[ago],
+                "Close": self.data.close[ago],
+                "buy": (
+                    trade_log["entry_price"]
+                    if bar_no == trade_log["start_bar"]
+                    else np.nan
+                ),
+                "sell": (
+                    trade_log["exit_price"]
+                    if bar_no == trade_log["exit_bar"]
+                    else np.nan
+                ),
+            }
+            if bar_no == trade_log["start_bar"]:
+                print("entry_price=", trade_log["entry_price"], "close_on_entry_bar=", self.data.close[ago])
+            klines.append(kline)
+        df = pd.DataFrame(klines)
+        df.index = pd.date_range(
+            start=trade_log["entry_dt"], periods=len(df), freq="1h"
+        )
+        file = os.path.join("pictures", f"chart_{trade_log['entry_dt'].replace(' ', '_')}.png")
+        plot_with_mpf(df, f"BTC/USDT 1h candle chart", file)
 
     def next(self):
         self.close_timeout()
-        
+
         if self.bracket_orders:
             return
 
@@ -135,8 +170,10 @@ class MyStrategy(bt.Strategy):
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
             return
-        
-        entry_order, sl_order, tp_order = self.bracket_orders if self.bracket_orders else (None, None, None)
+
+        entry_order, sl_order, tp_order = (
+            self.bracket_orders if self.bracket_orders else (None, None, None)
+        )
 
         if order == entry_order:
             # 开仓单
@@ -188,3 +225,4 @@ class MyStrategy(bt.Strategy):
     def stop(self):
         for trade_log in self.trade_logs:
             self._print_trade_log(trade_log)
+            self.draw_graph(trade_log)

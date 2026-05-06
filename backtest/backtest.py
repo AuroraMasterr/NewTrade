@@ -4,7 +4,11 @@ import argparse
 import os
 from strategy import MyStrategy
 import logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -60,7 +64,6 @@ def run_backtest(df, starting_cash):
     print(f"初始资金: {cerebro.broker.getvalue():.2f}")
     cerebro.run()
     print(f"最终资金: {cerebro.broker.getvalue():.2f}")
-    # cerebro.plot()
 
 
 if __name__ == "__main__":

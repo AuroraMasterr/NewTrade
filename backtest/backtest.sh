@@ -1,3 +1,4 @@
+export PYTHONPATH=.
 python backtest/backtest.py \
     --input_dir "data/crypto/binance/futures_um/BTCUSDT/1h/2026" \
     --start_date "20260101" \
