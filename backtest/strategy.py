@@ -115,7 +115,7 @@ class MyStrategy(bt.Strategy):
         for bar_no in range(trade_log["start_bar"], trade_log["exit_bar"] + 1):
             print(self._get_bar_text(bar_no))
 
-    def draw_graph(self, trade_log):
+    def draw_graph(self, trade_log, file):
         klines = []
         for bar_no in range(
             max(1, trade_log["start_bar"] - 7), trade_log["exit_bar"] + 1
@@ -126,33 +126,25 @@ class MyStrategy(bt.Strategy):
                 "High": self.data.high[ago],
                 "Low": self.data.low[ago],
                 "Close": self.data.close[ago],
-                "buy": (
-                    trade_log["entry_price"]
-                    if bar_no == trade_log["start_bar"]
-                    else np.nan
-                ),
-                "sell": (
-                    trade_log["exit_price"]
-                    if bar_no == trade_log["exit_bar"]
-                    else np.nan
-                ),
+                "buy": np.nan,
+                "sell": np.nan,
             }
             if bar_no == trade_log["start_bar"]:
-                print(
-                    "entry_price=",
-                    trade_log["entry_price"],
-                    "close_on_entry_bar=",
-                    self.data.close[ago],
-                )
+                flag = "buy" if trade_log["side"] == "开多" else "sell"
+                kline[flag] = trade_log["entry_price"]
+            elif bar_no == trade_log["exit_bar"]:
+                flag = "sell" if trade_log["side"] == "开多" else "buy"
+                kline[flag] = trade_log["exit_price"]
             klines.append(kline)
         df = pd.DataFrame(klines)
         df.index = pd.date_range(
             start=trade_log["entry_dt"], periods=len(df), freq="1h"
         )
-        file = os.path.join(
-            "pictures", f"chart_{trade_log['entry_dt'].replace(' ', '_')}.png"
-        )
-        plot_with_mpf(df, f"BTC/USDT 1h candle chart", file)
+        profit_pct = trade_log["exit_price"] - trade_log["entry_price"]
+        profit_pct = profit_pct * self.p.leverage / trade_log["entry_price"]
+        if trade_log["side"] == "开空":
+            profit_pct = -profit_pct
+        plot_with_mpf(df, f"BTC/USDT 1h candle chart", file, profit_pct)
 
     def next(self):
         self.close_timeout()
@@ -240,5 +232,8 @@ class MyStrategy(bt.Strategy):
             os.remove(xlsx_file)
         for trade_log in self.trade_logs:
             self._print_trade_log(trade_log)
-            self.draw_graph(trade_log)
-            save_tradelog_to_xlsx(trade_log, xlsx_file, "BTC/USDT 1h")
+            file = os.path.join(
+                "pictures", f"chart_{trade_log['entry_dt'].replace(' ', '_')}.png"
+            )
+            self.draw_graph(trade_log, file)
+            save_tradelog_to_xlsx(trade_log, file, xlsx_file, "BTC/USDT 1h")
