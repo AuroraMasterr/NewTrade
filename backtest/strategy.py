@@ -102,6 +102,13 @@ class MyStrategy(bt.Strategy):
             f"L={self.data.low[ago]:.2f} C={self.data.close[ago]:.2f}"
         )
 
+    def calculate_profit_pct(self, trade_log):
+        profit_pct = trade_log["exit_price"] - trade_log["entry_price"]
+        profit_pct = profit_pct * trade_log["leverage"] / trade_log["entry_price"]
+        if trade_log["side"] == "开空":
+            profit_pct = -profit_pct
+        return profit_pct
+
     def _print_trade_log(self, trade_log):
         print("=" * 80)
         print(
@@ -140,10 +147,7 @@ class MyStrategy(bt.Strategy):
         df.index = pd.date_range(
             start=trade_log["entry_dt"], periods=len(df), freq="1h"
         )
-        profit_pct = trade_log["exit_price"] - trade_log["entry_price"]
-        profit_pct = profit_pct * self.p.leverage / trade_log["entry_price"]
-        if trade_log["side"] == "开空":
-            profit_pct = -profit_pct
+        profit_pct = self.calculate_profit_pct(trade_log)
         plot_with_mpf(df, f"BTC/USDT 1h candle chart", file, profit_pct)
 
     def next(self):
@@ -230,10 +234,13 @@ class MyStrategy(bt.Strategy):
         xlsx_file = "backtest_result.xlsx"
         if os.path.exists(xlsx_file):
             os.remove(xlsx_file)
+        cash = 100
         for trade_log in self.trade_logs:
-            self._print_trade_log(trade_log)
+            # self._print_trade_log(trade_log)
             file = os.path.join(
                 "pictures", f"chart_{trade_log['entry_dt'].replace(' ', '_')}.png"
             )
             self.draw_graph(trade_log, file)
-            save_tradelog_to_xlsx(trade_log, file, xlsx_file, "BTC/USDT 1h")
+            profit_pct = self.calculate_profit_pct(trade_log)
+            cash *= 1 + profit_pct
+            save_tradelog_to_xlsx(trade_log, file, xlsx_file, "BTC-USDT 1h", cash)

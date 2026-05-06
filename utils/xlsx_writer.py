@@ -5,7 +5,15 @@ from openpyxl.utils import get_column_letter
 import os
 
 
-def save_tradelog_to_xlsx(trade_log, klines_figure, xlsx_path, sheet_name):
+def calculate_profit_pct(trade_log):
+    profit_pct = trade_log["exit_price"] - trade_log["entry_price"]
+    profit_pct = profit_pct * trade_log["leverage"] / trade_log["entry_price"]
+    if trade_log["side"] == "开空":
+        profit_pct = -profit_pct
+    return profit_pct
+
+
+def save_tradelog_to_xlsx(trade_log, klines_figure, xlsx_path, sheet_name, current_cap):
     headers = [
         "Pinbar振幅",
         "开仓方向",
@@ -16,6 +24,8 @@ def save_tradelog_to_xlsx(trade_log, klines_figure, xlsx_path, sheet_name):
         "止损线",
         "平仓时间",
         "平仓价格",
+        "收益率",
+        "当前资金(初始100)",
         "持仓K线图",
     ]
     if os.path.exists(xlsx_path):
@@ -44,12 +54,15 @@ def save_tradelog_to_xlsx(trade_log, klines_figure, xlsx_path, sheet_name):
     ws.cell(row=row_idx, column=7, value=trade_log["sl_price"])
     ws.cell(row=row_idx, column=8, value=str(trade_log["exit_dt"]))
     ws.cell(row=row_idx, column=9, value=trade_log["exit_price"])
-    ws.cell(row=row_idx, column=10, value=klines_figure)
+    ws.cell(row=row_idx, column=10, value=calculate_profit_pct(trade_log))
+    ws.cell(row=row_idx, column=11, value=current_cap)
+    ws.cell(row=row_idx, column=12, value=klines_figure)
+
     if klines_figure and os.path.exists(klines_figure):
         img = XLImage(klines_figure)
         img.width = 250
         img.height = 180
-        img_anchor = f"H{row_idx}"
+        img_anchor = f"{get_column_letter(12)}{row_idx}"
         ws.add_image(img, img_anchor)
         ws.row_dimensions[row_idx].height = 140.00  # 调整行高
     # 设置表头样式
@@ -58,13 +71,26 @@ def save_tradelog_to_xlsx(trade_log, klines_figure, xlsx_path, sheet_name):
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
     # 设置内容对齐
-    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=10):
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=12):
         for cell in row:
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    ws.column_dimensions[get_column_letter(3)].width = 22  # 日期调宽
-    ws.column_dimensions[get_column_letter(8)].width = 22
-    ws.column_dimensions[get_column_letter(10)].width = 22
+    column_widths = [
+        12,
+        12,
+        22,
+        12,
+        12,
+        12,
+        12,
+        22,
+        12,
+        12,
+        12,
+        22,
+    ]
+    for i, w in enumerate(column_widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
     wb.save(xlsx_path)
 
 
@@ -88,4 +114,5 @@ if __name__ == "__main__":
         klines_figure,
         "test.xlsx",
         "test",
+        100000,
     )
