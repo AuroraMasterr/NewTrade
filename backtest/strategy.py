@@ -3,7 +3,8 @@ import logging
 import numpy as np
 import pandas as pd
 import os
-from drawer.drawer import plot_with_mpf
+from utils.drawer import plot_with_mpf
+from utils.xlsx_writer import save_tradelog_to_xlsx
 
 
 class MyStrategy(bt.Strategy):
@@ -24,6 +25,7 @@ class MyStrategy(bt.Strategy):
         self.entry_side = None  # 开仓方向 "开多" / "开空"
         self.entry_price = None  # 开仓价格
         self.entry_dt = None  # 开仓时间
+        self.pinbar_amplitude = None  # 开仓信号振幅
 
         self.tp_price = None  # 止盈价
         self.sl_price = None  # 止损价
@@ -42,6 +44,8 @@ class MyStrategy(bt.Strategy):
                 "exit_bar": exit_bar,
                 "tp_price": self.tp_price,
                 "sl_price": self.sl_price,
+                "pinbar_amplitude": self.pinbar_amplitude,
+                "leverage": self.p.leverage,
             }
         )
 
@@ -54,7 +58,7 @@ class MyStrategy(bt.Strategy):
             self.bracket_orders = None
             self.close_order = self.close()
 
-    def open_position(self, price, is_buy):
+    def open_position(self, price, is_buy, amplitude):
         # 开仓
         if self.position:
             return
@@ -79,6 +83,7 @@ class MyStrategy(bt.Strategy):
             )
         self.entry_bar = len(self)
         self.entry_side = "开多" if is_buy else "开空"
+        self.pinbar_amplitude = amplitude
 
     def calc_full_size(self, price):
         cash = self.broker.getcash() * 0.999
@@ -133,13 +138,20 @@ class MyStrategy(bt.Strategy):
                 ),
             }
             if bar_no == trade_log["start_bar"]:
-                print("entry_price=", trade_log["entry_price"], "close_on_entry_bar=", self.data.close[ago])
+                print(
+                    "entry_price=",
+                    trade_log["entry_price"],
+                    "close_on_entry_bar=",
+                    self.data.close[ago],
+                )
             klines.append(kline)
         df = pd.DataFrame(klines)
         df.index = pd.date_range(
             start=trade_log["entry_dt"], periods=len(df), freq="1h"
         )
-        file = os.path.join("pictures", f"chart_{trade_log['entry_dt'].replace(' ', '_')}.png")
+        file = os.path.join(
+            "pictures", f"chart_{trade_log['entry_dt'].replace(' ', '_')}.png"
+        )
         plot_with_mpf(df, f"BTC/USDT 1h candle chart", file)
 
     def next(self):
@@ -162,10 +174,10 @@ class MyStrategy(bt.Strategy):
         lower_shadow = min(o, c) - l
         if upper_shadow > (2 / 3) * amplitude:
             # 上影线长，开空
-            self.open_position(price=c, is_buy=False)
+            self.open_position(price=c, is_buy=False, amplitude=amplitude)
         elif lower_shadow > (2 / 3) * amplitude:
             # 下影线长，开多
-            self.open_position(price=c, is_buy=True)
+            self.open_position(price=c, is_buy=True, amplitude=amplitude)
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -223,6 +235,10 @@ class MyStrategy(bt.Strategy):
             logging.warning(f"未知订单: {order}")
 
     def stop(self):
+        xlsx_file = "backtest_result.xlsx"
+        if os.path.exists(xlsx_file):
+            os.remove(xlsx_file)
         for trade_log in self.trade_logs:
             self._print_trade_log(trade_log)
             self.draw_graph(trade_log)
+            save_tradelog_to_xlsx(trade_log, xlsx_file, "BTC/USDT 1h")

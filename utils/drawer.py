@@ -17,7 +17,9 @@ def get_timestamp():
     return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
-def plot_with_mpf(df, title, file_name):
+def plot_with_mpf(df, title, file_name, profit_pct):
+    df["buy"] = df["buy"] * 0.9998  # 视觉调整，使三角更贴线
+    df["sell"] = df["sell"] * 1.0002
     apds = [
         mpf.make_addplot(
             df["buy"],
@@ -39,7 +41,7 @@ def plot_with_mpf(df, title, file_name):
         ),
     ]
     # classic style 也好看
-    mpf.plot(
+    fig, axes = mpf.plot(
         df,
         type="candle",
         style="charles",
@@ -47,8 +49,24 @@ def plot_with_mpf(df, title, file_name):
         datetime_format="%m-%d %H:%M",
         xrotation=30,
         title=title,
-        savefig=dict(fname=file_name, dpi=150, bbox_inches="tight"),
+        returnfig=True,
     )
+
+    sign = "+" if profit_pct >= 0 else ""
+    axes[0].text(
+        1,
+        1.1,
+        f"{sign}{100 * profit_pct:.2f}%",
+        transform=axes[0].transAxes,
+        ha="right",
+        va="top",
+        fontsize=20,
+        fontweight="bold",
+        color="green" if profit_pct >= 0 else "red",
+        zorder=20,
+    )
+
+    fig.savefig(file_name, dpi=150, bbox_inches="tight")
 
 
 if __name__ == "__main__":
@@ -60,4 +78,4 @@ if __name__ == "__main__":
     df.loc[df.index[2], "sell"] = 110
     file = os.path.join("pictures", f"chart_{get_timestamp()}.png")
 
-    plot_with_mpf(df, "BTC/USDT 1h candle chart", file)
+    plot_with_mpf(df, "BTC/USDT 1h candle chart", file, 0.2888)
