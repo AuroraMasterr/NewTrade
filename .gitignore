@@ -3,3 +3,4 @@ raw_data/
 *.log
 __pycache__/
 .venv/
+*.png

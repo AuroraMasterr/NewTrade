@@ -16,7 +16,12 @@ class CandlestickDrawer:
 
     @staticmethod
     def _setup_plot_style():
-        plt.rcParams["font.sans-serif"] = ["PingFang SC", "Heiti SC", "Arial Unicode MS", "DejaVu Sans"]
+        plt.rcParams["font.sans-serif"] = [
+            "PingFang SC",
+            "Heiti SC",
+            "Arial Unicode MS",
+            "DejaVu Sans",
+        ]
         plt.rcParams["axes.unicode_minus"] = False
 
     @staticmethod
@@ -32,7 +37,9 @@ class CandlestickDrawer:
         raise TypeError("timestamp 必须是 datetime、时间戳或 ISO 时间字符串")
 
     @classmethod
-    def _normalize_candles(cls, candles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    def _normalize_candles(
+        cls, candles: Sequence[Mapping[str, Any]]
+    ) -> list[dict[str, Any]]:
         if not candles:
             raise ValueError("candles 不能为空")
         rows = []
@@ -46,7 +53,15 @@ class CandlestickDrawer:
             cl = float(candle["close"])
             if hi < max(op, cl) or lo > min(op, cl) or hi < lo:
                 raise ValueError(f"第 {i} 条数据的 OHLC 不合法")
-            rows.append({"dt": cls._parse_timestamp(candle["timestamp"]), "open": op, "high": hi, "low": lo, "close": cl})
+            rows.append(
+                {
+                    "dt": cls._parse_timestamp(candle["timestamp"]),
+                    "open": op,
+                    "high": hi,
+                    "low": lo,
+                    "close": cl,
+                }
+            )
         rows.sort(key=lambda x: x["dt"])
         return rows
 
@@ -54,7 +69,9 @@ class CandlestickDrawer:
     def _calc_width(x_vals: list[float]) -> float:
         if len(x_vals) < 2:
             return 0.02
-        return max(min(x_vals[i] - x_vals[i - 1] for i in range(1, len(x_vals))) * 0.7, 0.0005)
+        return max(
+            min(x_vals[i] - x_vals[i - 1] for i in range(1, len(x_vals))) * 0.7, 0.0005
+        )
 
     @classmethod
     def plot(
@@ -75,8 +92,19 @@ class CandlestickDrawer:
             color = "#16a34a" if row["close"] >= row["open"] else "#dc2626"
             ax.vlines(x, row["low"], row["high"], color=color, linewidth=1)
             body_low = min(row["open"], row["close"])
-            body_h = abs(row["close"] - row["open"]) or max((row["high"] - row["low"]) * 0.02, 1e-6)
-            ax.add_patch(Rectangle((x - width / 2, body_low), width, body_h, facecolor=color, edgecolor=color, linewidth=1))
+            body_h = abs(row["close"] - row["open"]) or max(
+                (row["high"] - row["low"]) * 0.02, 1e-6
+            )
+            ax.add_patch(
+                Rectangle(
+                    (x - width / 2, body_low),
+                    width,
+                    body_h,
+                    facecolor=color,
+                    edgecolor=color,
+                    linewidth=1,
+                )
+            )
 
         ax.set_title(title)
         ax.set_xlabel("时间")
@@ -104,16 +132,20 @@ def plot_candlestick(
     save_path: Optional[Union[str, Path]] = None,
     show: bool = True,
 ) -> Optional[str]:
-    return CandlestickDrawer.plot(candles=candles, title=title, save_path=save_path, show=show)
+    return CandlestickDrawer.plot(
+        candles=candles, title=title, save_path=save_path, show=show
+    )
+
 
 def make_dict(open, close):
     return {
         "timestamp": datetime.now(),
         "open": open,
-        "low": 10000+random.uniform(-100, 100),
-        "high": 20000+random.uniform(-100, 100),
+        "low": 10000 + random.uniform(-100, 100),
+        "high": 20000 + random.uniform(-100, 100),
         "close": close,
     }
+
 
 if __name__ == "__main__":
     d1 = make_dict(12000, 13000)

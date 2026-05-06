@@ -60,7 +60,9 @@ class CandlestickDrawer:
         return max(min_diff * 0.7, 0.01)
 
     @staticmethod
-    def _to_percent_ohlc(klines: List[Kline], base_price: float) -> List[Tuple[float, float, float, float]]:
+    def _to_percent_ohlc(
+        klines: List[Kline], base_price: float
+    ) -> List[Tuple[float, float, float, float]]:
         out: List[Tuple[float, float, float, float]] = []
         for k in klines:
             out.append(
@@ -110,13 +112,21 @@ class CandlestickDrawer:
             raise ValueError("y_mode must be 'pct' or 'price'")
 
         CandlestickDrawer._setup_plot_style()
-        highlight_ts = int(to_datetime(highlight_time).timestamp()) if highlight_time is not None else None
+        highlight_ts = (
+            int(to_datetime(highlight_time).timestamp())
+            if highlight_time is not None
+            else None
+        )
         if highlight_ts is None:
             highlight_idx = len(klines) // 2
         else:
             highlight_idx = CandlestickDrawer._find_nearest_index(klines, highlight_ts)
 
-        base_price = klines[highlight_idx].close_price if klines[highlight_idx].close_price != 0 else klines[0].close_price
+        base_price = (
+            klines[highlight_idx].close_price
+            if klines[highlight_idx].close_price != 0
+            else klines[0].close_price
+        )
         pct_ohlc = CandlestickDrawer._to_percent_ohlc(klines, base_price=base_price)
 
         fig, ax = plt.subplots(figsize=(14, 7))
@@ -139,7 +149,9 @@ class CandlestickDrawer:
         if y_mode == "pct":
             ohlc_seq = pct_ohlc
         else:
-            ohlc_seq = [(k.open_price, k.high_price, k.low_price, k.close_price) for k in klines]
+            ohlc_seq = [
+                (k.open_price, k.high_price, k.low_price, k.close_price) for k in klines
+            ]
 
         for x, (op, hi, lo, cl) in zip(x_vals, ohlc_seq):
             color = "#16a34a" if cl >= op else "#dc2626"
@@ -148,7 +160,15 @@ class CandlestickDrawer:
             body_h = abs(cl - op)
             if body_h == 0:
                 body_h = max((hi - lo) * 0.02, 1e-6)
-            rect = Rectangle((x - width / 2, body_low), width, body_h, facecolor=color, edgecolor=color, linewidth=1, zorder=3)
+            rect = Rectangle(
+                (x - width / 2, body_low),
+                width,
+                body_h,
+                facecolor=color,
+                edgecolor=color,
+                linewidth=1,
+                zorder=3,
+            )
             ax.add_patch(rect)
 
         highlight_y = ohlc_seq[highlight_idx][3]
@@ -185,7 +205,12 @@ class CandlestickDrawer:
         highlight_time: Optional[Union[str, datetime, int, float]] = None,
         y_mode: str = "pct",
     ) -> str:
-        period = self._fetch_period(start_time=start_time, end_time=end_time, interval=self.interval, limit=limit)
+        period = self._fetch_period(
+            start_time=start_time,
+            end_time=end_time,
+            interval=self.interval,
+            limit=limit,
+        )
         title = f"{self.symbol} {self.interval} 蜡烛图（{start_time} 到 {end_time}）"
         return self._plot_klines(
             period.klines,
@@ -208,9 +233,18 @@ class CandlestickDrawer:
     ) -> str:
         if center_kline.symbol.upper() != self.symbol:
             raise ValueError("center_kline symbol must match drawer settings.")
-        start_dt = datetime.fromtimestamp(center_kline.timestamp) - timedelta(hours=hours_before)
-        end_dt = datetime.fromtimestamp(center_kline.timestamp) + timedelta(hours=hours_after)
-        period = self._fetch_period(start_time=start_dt, end_time=end_dt, interval=center_kline.interval, limit=limit)
+        start_dt = datetime.fromtimestamp(center_kline.timestamp) - timedelta(
+            hours=hours_before
+        )
+        end_dt = datetime.fromtimestamp(center_kline.timestamp) + timedelta(
+            hours=hours_after
+        )
+        period = self._fetch_period(
+            start_time=start_dt,
+            end_time=end_dt,
+            interval=center_kline.interval,
+            limit=limit,
+        )
         title = (
             f"{self.symbol} {center_kline.interval} 买入点前后蜡烛图 "
             f"（-{hours_before}h/+{hours_after}h，中心={datetime.fromtimestamp(center_kline.timestamp)}）"
@@ -233,7 +267,9 @@ class CandlestickDrawer:
     ) -> str:
         now_dt = to_datetime(current_time or datetime.now())
         start_dt = now_dt - timedelta(days=7)
-        period = self._fetch_period(start_time=start_dt, end_time=now_dt, interval="1d", limit=20)
+        period = self._fetch_period(
+            start_time=start_dt, end_time=now_dt, interval="1d", limit=20
+        )
         title = f"{self.symbol} 1d 前7天日线图（截至 {now_dt.strftime('%Y-%m-%d %H:%M:%S')}）"
         return self._plot_klines(
             period.klines,
@@ -244,19 +280,27 @@ class CandlestickDrawer:
             y_mode=y_mode,
         )
 
-    def is_obvious_high_7d(self, current_time: Optional[Union[str, datetime]] = None) -> bool:
+    def is_obvious_high_7d(
+        self, current_time: Optional[Union[str, datetime]] = None
+    ) -> bool:
         now_dt = to_datetime(current_time or datetime.now())
         start_dt = now_dt - timedelta(days=7)
-        period = self._fetch_period(start_time=start_dt, end_time=now_dt, interval="1d", limit=20)
+        period = self._fetch_period(
+            start_time=start_dt, end_time=now_dt, interval="1d", limit=20
+        )
         if len(period.klines) < 2:
             return False
         highs = [k.high_price for k in period.klines]
         return highs[-1] >= max(highs[:-1])
 
-    def is_obvious_low_7d(self, current_time: Optional[Union[str, datetime]] = None) -> bool:
+    def is_obvious_low_7d(
+        self, current_time: Optional[Union[str, datetime]] = None
+    ) -> bool:
         now_dt = to_datetime(current_time or datetime.now())
         start_dt = now_dt - timedelta(days=7)
-        period = self._fetch_period(start_time=start_dt, end_time=now_dt, interval="1d", limit=20)
+        period = self._fetch_period(
+            start_time=start_dt, end_time=now_dt, interval="1d", limit=20
+        )
         if len(period.klines) < 2:
             return False
         lows = [k.low_price for k in period.klines]
@@ -277,13 +321,21 @@ class CandlestickDrawer:
             raise ValueError("y_mode must be 'pct' or 'price'")
 
         CandlestickDrawer._setup_plot_style()
-        highlight_ts = int(to_datetime(highlight_time).timestamp()) if highlight_time is not None else None
+        highlight_ts = (
+            int(to_datetime(highlight_time).timestamp())
+            if highlight_time is not None
+            else None
+        )
         if highlight_ts is None:
             highlight_idx = len(klines) - 1
         else:
             highlight_idx = CandlestickDrawer._find_nearest_index(klines, highlight_ts)
 
-        base_price = klines[highlight_idx].close_price if klines[highlight_idx].close_price != 0 else klines[0].close_price
+        base_price = (
+            klines[highlight_idx].close_price
+            if klines[highlight_idx].close_price != 0
+            else klines[0].close_price
+        )
         pct_ohlc = CandlestickDrawer._to_percent_ohlc(klines, base_price=base_price)
 
         x_vals = [mdates.date2num(datetime.fromtimestamp(k.timestamp)) for k in klines]
@@ -296,12 +348,21 @@ class CandlestickDrawer:
         width = (interval_seconds / 86400.0) * 0.7
         highlight_x = x_vals[highlight_idx]
 
-        ax.axvline(highlight_x, color="#9ca3af", linestyle="--", linewidth=1.0, alpha=0.45, zorder=0)
+        ax.axvline(
+            highlight_x,
+            color="#9ca3af",
+            linestyle="--",
+            linewidth=1.0,
+            alpha=0.45,
+            zorder=0,
+        )
 
         if y_mode == "pct":
             ohlc_seq = pct_ohlc
         else:
-            ohlc_seq = [(k.open_price, k.high_price, k.low_price, k.close_price) for k in klines]
+            ohlc_seq = [
+                (k.open_price, k.high_price, k.low_price, k.close_price) for k in klines
+            ]
 
         for x, (op, hi, lo, cl) in zip(x_vals, ohlc_seq):
             color = "#16a34a" if cl >= op else "#dc2626"
@@ -310,7 +371,15 @@ class CandlestickDrawer:
             body_h = abs(cl - op)
             if body_h == 0:
                 body_h = max((hi - lo) * 0.02, 1e-6)
-            rect = Rectangle((x - width / 2, body_low), width, body_h, facecolor=color, edgecolor=color, linewidth=1, zorder=3)
+            rect = Rectangle(
+                (x - width / 2, body_low),
+                width,
+                body_h,
+                facecolor=color,
+                edgecolor=color,
+                linewidth=1,
+                zorder=3,
+            )
             ax.add_patch(rect)
 
         highlight_y = ohlc_seq[highlight_idx][3]
@@ -320,8 +389,12 @@ class CandlestickDrawer:
         lows = [v[2] for v in ohlc_seq]
         max_y = max(highs)
         min_y = min(lows)
-        ax.axhline(max_y, color="#2563eb", linestyle="--", linewidth=1.0, alpha=0.65, zorder=1)
-        ax.axhline(min_y, color="#7c3aed", linestyle="--", linewidth=1.0, alpha=0.65, zorder=1)
+        ax.axhline(
+            max_y, color="#2563eb", linestyle="--", linewidth=1.0, alpha=0.65, zorder=1
+        )
+        ax.axhline(
+            min_y, color="#7c3aed", linestyle="--", linewidth=1.0, alpha=0.65, zorder=1
+        )
 
         ax.set_title(title)
         ax.set_xlabel("时间")
@@ -368,7 +441,10 @@ class CandlestickDrawer:
         elif interval == "4h":
             ax.set_xticks(x_vals)
             ax.set_xticklabels(
-                [datetime.fromtimestamp(k.timestamp).strftime("%m-%d %H:%M") for k in klines],
+                [
+                    datetime.fromtimestamp(k.timestamp).strftime("%m-%d %H:%M")
+                    for k in klines
+                ],
                 rotation=0,
             )
             ax.tick_params(axis="x", labelbottom=True)
@@ -397,7 +473,9 @@ class CandlestickDrawer:
         - last 12h in 1h candles  [anchor-12h, anchor)
         - last 3h  in 15m candles [anchor-3h,  anchor)
         """
-        anchor_dt = to_datetime(anchor_hour or datetime.now()).replace(minute=0, second=0, microsecond=0)
+        anchor_dt = to_datetime(anchor_hour or datetime.now()).replace(
+            minute=0, second=0, microsecond=0
+        )
         h1_start = anchor_dt - timedelta(hours=12)
         m15_start = anchor_dt - timedelta(hours=3)
 
@@ -414,8 +492,16 @@ class CandlestickDrawer:
             limit=32,
         )
 
-        h1_klines = [k for k in h1_period.klines if h1_start.timestamp() <= k.timestamp < anchor_dt.timestamp()]
-        m15_klines = [k for k in m15_period.klines if m15_start.timestamp() <= k.timestamp < anchor_dt.timestamp()]
+        h1_klines = [
+            k
+            for k in h1_period.klines
+            if h1_start.timestamp() <= k.timestamp < anchor_dt.timestamp()
+        ]
+        m15_klines = [
+            k
+            for k in m15_period.klines
+            if m15_start.timestamp() <= k.timestamp < anchor_dt.timestamp()
+        ]
 
         if len(h1_klines) > 12:
             h1_klines = h1_klines[-12:]
@@ -445,7 +531,9 @@ class CandlestickDrawer:
             interval="15m",
         )
 
-        fig.suptitle(f"{self.symbol} 多周期快照（整点：{anchor_dt:%Y-%m-%d %H:%M}）", fontsize=14)
+        fig.suptitle(
+            f"{self.symbol} 多周期快照（整点：{anchor_dt:%Y-%m-%d %H:%M}）", fontsize=14
+        )
         axes[0].tick_params(axis="x", labelbottom=True)
         axes[1].tick_params(axis="x", labelbottom=True)
         plt.tight_layout()
@@ -471,18 +559,38 @@ class CandlestickDrawer:
         - last 12h in 1h candles  [anchor-12h, anchor)
         - last 3h  in 15m candles [anchor-3h,  anchor)
         """
-        anchor_dt = to_datetime(anchor_hour or datetime.now()).replace(minute=0, second=0, microsecond=0)
+        anchor_dt = to_datetime(anchor_hour or datetime.now()).replace(
+            minute=0, second=0, microsecond=0
+        )
         h4_start = anchor_dt - timedelta(hours=48)
         h1_start = anchor_dt - timedelta(hours=12)
         m15_start = anchor_dt - timedelta(hours=3)
 
-        h4_period = self._fetch_period(start_time=h4_start, end_time=anchor_dt, interval="4h", limit=24)
-        h1_period = self._fetch_period(start_time=h1_start, end_time=anchor_dt, interval="1h", limit=24)
-        m15_period = self._fetch_period(start_time=m15_start, end_time=anchor_dt, interval="15m", limit=32)
+        h4_period = self._fetch_period(
+            start_time=h4_start, end_time=anchor_dt, interval="4h", limit=24
+        )
+        h1_period = self._fetch_period(
+            start_time=h1_start, end_time=anchor_dt, interval="1h", limit=24
+        )
+        m15_period = self._fetch_period(
+            start_time=m15_start, end_time=anchor_dt, interval="15m", limit=32
+        )
 
-        h4_klines = [k for k in h4_period.klines if h4_start.timestamp() <= k.timestamp < anchor_dt.timestamp()]
-        h1_klines = [k for k in h1_period.klines if h1_start.timestamp() <= k.timestamp < anchor_dt.timestamp()]
-        m15_klines = [k for k in m15_period.klines if m15_start.timestamp() <= k.timestamp < anchor_dt.timestamp()]
+        h4_klines = [
+            k
+            for k in h4_period.klines
+            if h4_start.timestamp() <= k.timestamp < anchor_dt.timestamp()
+        ]
+        h1_klines = [
+            k
+            for k in h1_period.klines
+            if h1_start.timestamp() <= k.timestamp < anchor_dt.timestamp()
+        ]
+        m15_klines = [
+            k
+            for k in m15_period.klines
+            if m15_start.timestamp() <= k.timestamp < anchor_dt.timestamp()
+        ]
 
         if len(h4_klines) > 12:
             h4_klines = h4_klines[-12:]
@@ -525,7 +633,10 @@ class CandlestickDrawer:
         axes[0].tick_params(axis="x", labelbottom=True)
         axes[1].tick_params(axis="x", labelbottom=True)
         axes[2].tick_params(axis="x", labelbottom=True)
-        fig.suptitle(f"{self.symbol} 多周期快照（4h/1h/15m，整点：{anchor_dt:%Y-%m-%d %H:%M}）", fontsize=14)
+        fig.suptitle(
+            f"{self.symbol} 多周期快照（4h/1h/15m，整点：{anchor_dt:%Y-%m-%d %H:%M}）",
+            fontsize=14,
+        )
         plt.tight_layout()
 
         out = append_timestamp(save_path or "draw/output/triple_timeframe_chart.png")
@@ -549,18 +660,38 @@ class CandlestickDrawer:
         - right-top: 4h candles (last 48h)
         - right-bottom: 15m candles (last 3h)
         """
-        anchor_dt = to_datetime(anchor_hour or datetime.now()).replace(minute=0, second=0, microsecond=0)
+        anchor_dt = to_datetime(anchor_hour or datetime.now()).replace(
+            minute=0, second=0, microsecond=0
+        )
         h4_start = anchor_dt - timedelta(hours=48)
         h1_start = anchor_dt - timedelta(hours=12)
         m15_start = anchor_dt - timedelta(hours=3)
 
-        h4_period = self._fetch_period(start_time=h4_start, end_time=anchor_dt, interval="4h", limit=24)
-        h1_period = self._fetch_period(start_time=h1_start, end_time=anchor_dt, interval="1h", limit=24)
-        m15_period = self._fetch_period(start_time=m15_start, end_time=anchor_dt, interval="15m", limit=32)
+        h4_period = self._fetch_period(
+            start_time=h4_start, end_time=anchor_dt, interval="4h", limit=24
+        )
+        h1_period = self._fetch_period(
+            start_time=h1_start, end_time=anchor_dt, interval="1h", limit=24
+        )
+        m15_period = self._fetch_period(
+            start_time=m15_start, end_time=anchor_dt, interval="15m", limit=32
+        )
 
-        h4_klines = [k for k in h4_period.klines if h4_start.timestamp() <= k.timestamp < anchor_dt.timestamp()]
-        h1_klines = [k for k in h1_period.klines if h1_start.timestamp() <= k.timestamp < anchor_dt.timestamp()]
-        m15_klines = [k for k in m15_period.klines if m15_start.timestamp() <= k.timestamp < anchor_dt.timestamp()]
+        h4_klines = [
+            k
+            for k in h4_period.klines
+            if h4_start.timestamp() <= k.timestamp < anchor_dt.timestamp()
+        ]
+        h1_klines = [
+            k
+            for k in h1_period.klines
+            if h1_start.timestamp() <= k.timestamp < anchor_dt.timestamp()
+        ]
+        m15_klines = [
+            k
+            for k in m15_period.klines
+            if m15_start.timestamp() <= k.timestamp < anchor_dt.timestamp()
+        ]
 
         if len(h4_klines) > 12:
             h4_klines = h4_klines[-12:]
@@ -570,14 +701,24 @@ class CandlestickDrawer:
             m15_klines = m15_klines[-12:]
 
         if not h4_klines or not h1_klines or not m15_klines:
-            raise ValueError("Not enough kline data to draw split triple timeframe chart.")
+            raise ValueError(
+                "Not enough kline data to draw split triple timeframe chart."
+            )
 
         CandlestickDrawer._setup_plot_style()
         fig = plt.figure(figsize=(18, 10))
-        gs = GridSpec(2, 2, figure=fig, width_ratios=[1.2, 1.0], height_ratios=[1, 1], wspace=0.16, hspace=0.28)
-        ax_left = fig.add_subplot(gs[:, 0])   # 1h spans two rows
-        ax_rt = fig.add_subplot(gs[0, 1])     # 4h
-        ax_rb = fig.add_subplot(gs[1, 1])     # 15m
+        gs = GridSpec(
+            2,
+            2,
+            figure=fig,
+            width_ratios=[1.2, 1.0],
+            height_ratios=[1, 1],
+            wspace=0.16,
+            hspace=0.28,
+        )
+        ax_left = fig.add_subplot(gs[:, 0])  # 1h spans two rows
+        ax_rt = fig.add_subplot(gs[0, 1])  # 4h
+        ax_rb = fig.add_subplot(gs[1, 1])  # 15m
 
         self._plot_klines_on_axis(
             ax_left,
@@ -607,10 +748,15 @@ class CandlestickDrawer:
         ax_left.tick_params(axis="x", labelbottom=True)
         ax_rt.tick_params(axis="x", labelbottom=True)
         ax_rb.tick_params(axis="x", labelbottom=True)
-        fig.suptitle(f"{self.symbol} 多周期快照（左1h | 右4h/15m，整点：{anchor_dt:%Y-%m-%d %H:%M}）", fontsize=14)
+        fig.suptitle(
+            f"{self.symbol} 多周期快照（左1h | 右4h/15m，整点：{anchor_dt:%Y-%m-%d %H:%M}）",
+            fontsize=14,
+        )
         plt.tight_layout()
 
-        out = append_timestamp(save_path or "draw/output/triple_timeframe_split_chart.png")
+        out = append_timestamp(
+            save_path or "draw/output/triple_timeframe_split_chart.png"
+        )
         out.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(out, dpi=150)
         if show:
@@ -618,12 +764,24 @@ class CandlestickDrawer:
         plt.close(fig)
         return str(out.resolve())
 
-    def get_last_1h_stats(self, anchor_hour: Optional[Union[str, datetime]] = None) -> Dict[str, Any]:
+    def get_last_1h_stats(
+        self, anchor_hour: Optional[Union[str, datetime]] = None
+    ) -> Dict[str, Any]:
         """Return stats of the last closed 1h candle: [anchor-1h, anchor)."""
-        anchor_dt = to_datetime(anchor_hour or datetime.now()).replace(minute=0, second=0, microsecond=0)
+        anchor_dt = to_datetime(anchor_hour or datetime.now()).replace(
+            minute=0, second=0, microsecond=0
+        )
         start_dt = anchor_dt - timedelta(hours=2)
-        period = self._fetch_period(start_time=start_dt, end_time=anchor_dt, interval="1h", limit=4)
-        klines = [k for k in period.klines if (anchor_dt - timedelta(hours=1)).timestamp() <= k.timestamp < anchor_dt.timestamp()]
+        period = self._fetch_period(
+            start_time=start_dt, end_time=anchor_dt, interval="1h", limit=4
+        )
+        klines = [
+            k
+            for k in period.klines
+            if (anchor_dt - timedelta(hours=1)).timestamp()
+            <= k.timestamp
+            < anchor_dt.timestamp()
+        ]
         if not klines:
             raise ValueError("No last 1h candle found for stats.")
         k = klines[-1]
